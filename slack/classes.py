@@ -1,4 +1,4 @@
-import json, re, time, urllib2, websocket
+import json, re, threading, time, urllib2, websocket
 
 SLACK_API_BASE = 'https://slack.com/api/'
 
@@ -122,6 +122,58 @@ class SlackBot(object):
         return result
 
     def run(self):
+        t = self.thread()
+        try:
+            while True: pass
+        except KeyboardInterrupt:
+            self.ws.close()
+            return
+        
+    def say(self, channel_id, text):
+        """Send chat message from bot."""
+        if self.show_typing:
+            for i in range(0, 2):
+                msg = json.dumps({'id': self._next_message_id(),
+                                  'type': 'typing',
+                                  'channel': channel_id})
+                self.ws.send(msg)
+                time.sleep(1)
+                
+        msg = json.dumps({'id': self._next_message_id(),
+                          'type': 'message',
+                          'channel': channel_id,
+                          'text': text})
+        self.ws.send(msg)
+
+    def stop(self):
+        self.ws.close()
+
+    def thread(self, **kwargs):
+        self._thread = threading.Thread(target=self._run, **kwargs)
+        self._thread.start()
+        return self._thread
+
+    def user_from_id(self, id):
+        """Return SlackUser object with given id."""
+        for user in self.users:
+            if user.id == id:
+                return user
+        else:
+            raise SlackBotError('No user with id %s' % id)
+
+    def _fire_event(self, event, *args, **kwargs):
+        if event in self.event_listeners:
+            for handler in self.event_listeners[event]:
+                handler(*args, **kwargs)
+
+    def _next_message_id(self):
+        self.message_id += 1
+        return self.message_id
+
+    def _print_debug(self, *args):
+        if self.debug:
+            print ' '.join(args)
+    def _run(self):
         """Run bot synchronously in the foreground."""
         def on_open(ws):
             self._fire_event('open')
@@ -161,43 +213,6 @@ class SlackBot(object):
             self.ws.run_forever()
         else:
             raise SlackError('Could not initiate RTM session')
-
-    def say(self, channel_id, text):
-        """Send chat message from bot."""
-        if self.show_typing:
-            for i in range(0, 2):
-                msg = json.dumps({'id': self._next_message_id(),
-                                  'type': 'typing',
-                                  'channel': channel_id})
-                self.ws.send(msg)
-                time.sleep(1)
-                
-        msg = json.dumps({'id': self._next_message_id(),
-                          'type': 'message',
-                          'channel': channel_id,
-                          'text': text})
-        self.ws.send(msg)
-
-    def user_from_id(self, id):
-        """Return SlackUser object with given id."""
-        for user in self.users:
-            if user.id == id:
-                return user
-        else:
-            raise SlackBotError('No user with id %s' % id)
-
-    def _next_message_id(self):
-        self.message_id += 1
-        return self.message_id
-
-    def _fire_event(self, event, *args, **kwargs):
-        if event in self.event_listeners:
-            for handler in self.event_listeners[event]:
-                handler(*args, **kwargs)
-
-    def _print_debug(self, *args):
-        if self.debug:
-            print ' '.join(args)
 
 class SlackChannel:
     """Basic representation of a Slack chat channel"""
