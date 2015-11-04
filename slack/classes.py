@@ -13,6 +13,7 @@ class SlackBot(object):
         self.message_id = 0
         self.show_typing = False
         self.debug = debug
+        self._threads = []
 
     def add_event_listener(self, event, handler):
         """
@@ -27,6 +28,9 @@ class SlackBot(object):
             self.event_listeners[event] = []
 
         self.event_listeners[event].append(handler)
+
+    def add_thread(self, f):
+        self._threads.append(f)
         
     def channel_from_id(self, id):
         """Return SlackChannel object with given id."""
@@ -85,27 +89,52 @@ class SlackBot(object):
                     f(msg, m)
             self.add_event_listener('message', message_handler)
         return inner_decorator
+
+    def on_interval(self, interval):
+        """Create event handler that runs periodically (every ``interval`` seconds)"""
+        def inner_decorator(f):
+            def interval_function():
+                while True:
+                    time.sleep(interval)
+                    if self.running:
+                        f()
+                    else:
+                        return
+            self.add_thread(interval_function)
+        return inner_decorator
     
-    def on_open(self, f):
-        """Add event handler to run when websocket connection is created."""
-        self.add_event_listener('open', f)
+    def on_close(self, f):
+        """Add event handler to run when websocket connection is closed."""
+        self.add_event_listener('close', f)
 
     def on_error(self, f):
         """Add event handler to run when websocket error occurs."""
         self.add_event_listener('error', f)
 
-    def on_close(self, f):
-        """Add event handler to run when websocket connection is closed."""
-        self.add_event_listener('close', f)
-
     def on_message(self, f):
         """Add event handler to run when a chat message occurs."""
         self.add_event_listener('message', f)
+
+    def on_open(self, f):
+        """Add event handler to run when websocket connection is created."""
+        self.add_event_listener('open', f)
 
     def on_presence_change(self, f):
         """Add event handler to run when a user enters or leaves."""
         self.add_event_listener('presence_change', f)
 
+    def on_timeout(self, interval):
+        """Create event handler that runs after ``interval`` seconds."""
+        def inner_decorator(f):
+            def timeout_function():
+                time.sleep(interval)
+                if self.running:
+                    f()
+                else:
+                    return
+            self.add_thread(timeout_function)
+        return inner_decorator
+    
     def on_user_typing(self, f):
         """Add event handler to run when a user is typing."""
         self.add_event_listener('user_typing', f)
@@ -147,6 +176,7 @@ class SlackBot(object):
 
     def stop(self):
         self.ws.close()
+        self.running = False
 
     def thread(self, **kwargs):
         self._thread = threading.Thread(target=self._run, **kwargs)
@@ -210,7 +240,13 @@ class SlackBot(object):
                                              on_open = on_open)
 
             websocket.enableTrace(self.debug)
+
+            self.running = True
+            for fn in self._threads:
+                threading.Thread(target=fn).start()
+            
             self.ws.run_forever()
+            self.running = False
         else:
             raise SlackError('Could not initiate RTM session')
 
