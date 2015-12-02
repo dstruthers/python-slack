@@ -1,4 +1,5 @@
 import json, re, threading, time, urllib2, websocket
+from exceptions import SlackError
 
 SLACK_API_BASE = 'https://slack.com/api/'
 
@@ -38,7 +39,7 @@ class SlackBot(object):
             if channel.id == id:
                 return channel
         else:
-            raise SlackBotError('No channel with id %s' % id)
+            raise SlackError('No channel with id %s' % id)
         
     def get_channel_id(self, channel_name):
         """Convert channel name to channel id."""
@@ -46,7 +47,15 @@ class SlackBot(object):
             if channel.name == channel_name:
                 return channel.id
         else:
-            raise SlackBotError('Unknown channel: %s' % channel_name)
+            raise SlackError('Unknown channel: %s' % channel_name)
+
+    def get_user_id(self, user_name):
+        """Convert username to user id."""
+        for user in self.users:
+            if user.username == user_name:
+                return user.id
+        else:
+            raise SlackError('Unknown user: %s' % user_name)
 
     def match_message(self, pattern):
         """
@@ -65,7 +74,7 @@ class SlackBot(object):
             
         def inner_decorator(f):
             def message_handler(msg):
-                m = re.match(re_pattern, msg.text)
+                m = re.match(re_pattern, msg.text, re.I)
                 if m:
                     f(msg, **m.groupdict())
             self.add_event_listener('message', message_handler)
@@ -189,7 +198,7 @@ class SlackBot(object):
             if user.id == id:
                 return user
         else:
-            raise SlackBotError('No user with id %s' % id)
+            raise SlackError('No user with id %s' % id)
 
     def _fire_event(self, event, *args, **kwargs):
         if event in self.event_listeners:
