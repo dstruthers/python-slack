@@ -162,7 +162,8 @@ class SlackBot(object):
     def run(self):
         t = self.thread()
         try:
-            while True: pass
+            while True:
+                time.sleep(1)
         except KeyboardInterrupt:
             self.ws.close()
             return
@@ -189,6 +190,7 @@ class SlackBot(object):
 
     def thread(self, **kwargs):
         self._thread = threading.Thread(target=self._run, **kwargs)
+        self._thread.daemon = True
         self._thread.start()
         return self._thread
 
