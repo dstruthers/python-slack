@@ -14,6 +14,7 @@ class SlackBot(object):
         self.message_id = 0
         self.show_typing = False
         self.debug = debug
+        self.running = False
         self._threads = []
 
     def add_event_listener(self, event, handler):
@@ -32,6 +33,10 @@ class SlackBot(object):
 
     def add_thread(self, f):
         self._threads.append(f)
+        if self.running:
+            t = threading.Thread(target=f)
+            t.daemon = True
+            t.start()
         
     def channel_from_id(self, id):
         """Return SlackChannel object with given id."""
