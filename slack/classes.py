@@ -254,7 +254,9 @@ class SlackBot(object):
 
             self.running = True
             for fn in self._threads:
-                threading.Thread(target=fn).start()
+                t = threading.Thread(target=fn)
+                t.daemon = True
+                t.start()
             
             self.ws.run_forever()
             self.running = False
